@@ -72,13 +72,21 @@ $(function() {
       return;
     }
 
-    $.get(url, {}, function(csv) {
-      var data = parseCSV(csv);
-      update(data, columnHeadersName, columnHeadersType, tableData);
+    $.ajax({
+      type: "GET",
+      url: url,
+      success: function(csv) {
+        var data = parseCSV(csv);
+        update(data, columnHeadersName, columnHeadersType, tableData);
 
-      tableau.connectionData = url;
-      tableau.connectionName = viewUrl;
-      tableau.submit();
+        tableau.connectionData = url;
+        tableau.connectionName = viewUrl;
+        tableau.submit();
+      },
+      error: function(xhr, ajaxOptions, thrownError) {
+        tableau.log("connection error: " + xhr.responseText + "\n" + thrownError);
+        tableau.abortWithError("error connecting");
+      }
     });
   });
 });
