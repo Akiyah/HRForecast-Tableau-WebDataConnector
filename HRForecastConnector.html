@@ -6,6 +6,20 @@
 <script src="https://public.tableau.com/javascripts/api/tableauwdc-1.1.0.js" type="text/javascript"></script>
 <script type="text/javascript">
 
+
+function retrieveConnectorData(callback) {
+  if (window.cachedConnectorData) {
+    callback(window.cachedConnectorData);
+    return;
+  }
+
+  var csvUrl = tableau.connectionData;
+  $.get(csvUrl, function(csv) {
+      window.cachedConnectorData = createConnectorData(parseCSV(csv));
+      callback(window.cachedConnectorData);
+  });
+}
+
 function parseCSV(csv) {
   var data = [];
 
@@ -32,73 +46,63 @@ function csvUrlFromViewUrl(viewUrl) {
   return csvUrl;
 }
 
-function update(data, columnHeadersName, columnHeadersType, tableData) {
+function createConnectorData(data) {
+  var fieldNames = [];
+  var fieldTypes = [];
   for (var i = 0; i < data[0].length; i++) {
-    columnHeadersName[i] = data[0][i];
-    columnHeadersType[i] = (i == 0 ? 'datetime' : 'int');
+    fieldNames[i] = data[0][i];
+    fieldTypes[i] = (i == 0 ? 'datetime' : 'int');
   }
 
+  var rowData = [];
   for (var j = 1; j < data.length; j++) {
     var d = {};
     for (var i = 0; i < data[j].length; i++) {
-      d[columnHeadersName[i]] = data[j][i];
+      d[fieldNames[i]] = data[j][i];
     }
-    tableData.push(d);
+    rowData.push(d);
   }
+
+  return {"fieldNames":fieldNames, "fieldTypes":fieldTypes, "rowData":rowData};
 }
 
 $(function() {
-  var columnHeadersName = [];
-  var columnHeadersType = [];
-  var tableData = [];
-
   var myConnector = tableau.makeConnector();
 
   myConnector.getColumnHeaders = function() {
-    tableau.headersCallback(columnHeadersName, columnHeadersType);
+    retrieveConnectorData(function (connectorData) {
+      tableau.headersCallback(connectorData['fieldNames'], connectorData['fieldTypes']);
+    });
   };
-   
+
   myConnector.getTableData = function(lastRecordToken) {
-    tableau.dataCallback(tableData, tableData.length.toString(), false);
+    retrieveConnectorData(function (connectorData) {
+      var rowData = connectorData['rowData'];
+      tableau.dataCallback(rowData, rowData.length.toString(), false);
+    });
   };
 
   tableau.registerConnector(myConnector);
 
-  $('#submit').click(function() {
-    var viewUrl = $('#viewUrl').val();
-    var url = csvUrlFromViewUrl(viewUrl);
-    if (!url) {
+  $("#submit").click(function() {
+    var viewUrl = $('#viewUrl').val().trim();
+    var csvUrl = csvUrlFromViewUrl(viewUrl);
+    if (!csvUrl) {
       window.alert('Input HRForecast view url.');
       return;
     }
 
-    $.ajax({
-      type: "GET",
-      url: url,
-      success: function(csv) {
-        var data = parseCSV(csv);
-        update(data, columnHeadersName, columnHeadersType, tableData);
-
-        tableau.connectionData = url;
-        tableau.connectionName = viewUrl;
-        tableau.submit();
-      },
-      error: function(xhr, ajaxOptions, thrownError) {
-        tableau.log("connection error: " + xhr.responseText + "\n" + thrownError);
-        tableau.abortWithError("error connecting");
-      }
-    });
+    tableau.connectionName = viewUrl;
+    tableau.connectionData = csvUrl;
+    tableau.submit();
   });
 });
-
 </script>
 </head>
 <body>
-
- Enter a URL: 
- <input type="text" id="viewUrl" size="50" value="" placeholder="http://localhost:5127/view/service_name/section_name/graph_name, and so on" />  
+ Enter a URL:
+ <input type="text" id="viewUrl" size="50" value="" placeholder="http://localhost:5127/view/service_name/section_name/graph_name, and so on" />
  <button type="button" id="submit">submit</button><br/>
-
 </body>
 </html>
 
